@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ImmoScout24 Favoriten – Biel/Bienne</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        body { margin: 0; font-family: sans-serif; }
+        #map { height: 100vh; width: 100%; }
+        #sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            max-width: 320px;
+            padding: 15px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        #sidebar h3 { margin: 0 0 8px; }
+        #status { margin: 0; }
+    </style>
+</head>
+<body>
+    <aside id="sidebar">
+        <h3>ImmoScout24 Favoriten</h3>
+        <p id="status" role="status">Suche die 18 Objektstandorte…</p>
+    </aside>
+    <div id="map" aria-label="Karte der favorisierten Immobilien"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const favorites = [
+            { address: "Bärenmatt 6, 2503 Biel, Switzerland", label: "Bärenmatt 6, 2503 Biel" },
+            { address: "Giessereigässli 20, 2503 Biel, Switzerland", label: "Giessereigässli 20, 2503 Biel" },
+            { address: "Mittelstrasse 16C, 2502 Biel, Switzerland", label: "Mittelstrasse 16C, 2502 Biel/Bienne" },
+            { address: "Untergässli 4, 2502 Biel, Switzerland", label: "Untergässli 4, 2502 Biel/Bienne" },
+            { address: "Neuengasse, 2502 Biel, Switzerland", label: "Neuengasse, 2502 Biel" },
+            { address: "Mettstrasse 65, 2502 Biel, Switzerland", label: "Mettstrasse 65, 2502 Biel/Bienne" },
+            { address: "Dufourstrasse 153, 2502 Biel, Switzerland", label: "Dufourstrasse 153, 2502 Biel/Bienne" },
+            { address: "Brüggstrasse 74, 2503 Biel, Switzerland", label: "Brüggstrasse 74, 2503 Biel" },
+            { address: "Champagneallee 37, 2504 Biel, Switzerland", label: "Champagneallée 37, 2504 Biel/Bienne" },
+            { address: "Lyss-Strasse 11, 2560 Nidau, Switzerland", label: "Lyss-Strasse 11, 2560 Nidau" },
+            { address: "Mattenstrasse 21, 2503 Biel, Switzerland", label: "Mattenstrasse 21, 2503 Biel" },
+            { address: "Zentralstrasse 28, 2502 Biel, Switzerland", label: "Zentralstrasse 28, 2502 Biel" },
+            { address: "Verresiusstrasse 6, 2502 Biel, Switzerland", label: "Verresiusstrasse 6, 2502 Biel/Bienne" },
+            { address: "Georg-Friedrich-Heilmann-Strasse 12, 2502 Biel, Switzerland", label: "Georg-Friedrich-Heilmann-Strasse 12, 2502 Biel" },
+            { address: "General-Dufour-Strasse 91, 2502 Biel, Switzerland", label: "General-Dufour-Strasse 91, 2502 Biel" },
+            { address: "Jurastrasse 14, 2502 Biel, Switzerland", label: "Jurastrasse 14, 2502 Biel" },
+            { address: "Güterstrasse 6, 2502 Biel, Switzerland", label: "Güterstrasse 6, 2502 Biel/Bienne" },
+            { address: "Mattenstrasse 14, 2503 Biel, Switzerland", label: "Mattenstrasse 14, 2503 Biel" }
+        ];
+
+        const map = L.map("map").setView([47.14, 7.25], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+            maxZoom: 19
+        }).addTo(map);
+
+        const status = document.getElementById("status");
+        const locations = [];
+        const failed = [];
+        const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+        async function addFavoritePins() {
+            for (const [index, favorite] of favorites.entries()) {
+                status.textContent = `Suche Objektstandorte… ${index + 1} von ${favorites.length}`;
+                try {
+                    const url = new URL("https://nominatim.openstreetmap.org/search");
+                    url.search = new URLSearchParams({
+                        format: "jsonv2",
+                        limit: "1",
+                        countrycodes: "ch",
+                        q: favorite.address
+                    });
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Geocoding-Anfrage fehlgeschlagen (HTTP ${response.status})`);
+                    }
+                    const results = await response.json();
+                    if (results.length === 0) {
+                        failed.push(favorite.label);
+                    } else {
+                        const { lat, lon } = results[0];
+                        const marker = L.marker([Number(lat), Number(lon)]).addTo(map);
+                        const popup = document.createElement("div");
+                        const label = document.createElement("strong");
+                        label.textContent = favorite.label;
+                        const link = document.createElement("a");
+                        const query = `site:immoscout24.ch "${favorite.label}"`;
+                        link.href = `https://www.google.com/search?${new URLSearchParams({ q: query })}`;
+                        link.target = "_blank";
+                        link.rel = "noopener noreferrer";
+                        link.textContent = "Auf ImmoScout24 suchen";
+                        popup.append(label, document.createElement("br"), link);
+                        marker.bindPopup(popup);
+                        locations.push([Number(lat), Number(lon)]);
+                    }
+                } catch (error) {
+                    console.error(`Standort konnte nicht gefunden werden: ${favorite.label}`, error);
+                    failed.push(favorite.label);
+                }
+
+                if (index < favorites.length - 1) {
+                    await wait(1100);
+                }
+            }
+
+            if (locations.length > 0) {
+                map.fitBounds(L.latLngBounds(locations), { padding: [40, 40], maxZoom: 16 });
+            }
+            const placed = `${locations.length} von ${favorites.length} Favoriten auf der Karte`;
+            status.textContent = failed.length
+                ? `${placed}. Nicht gefunden: ${failed.join("; ")}`
+                : `${placed}.`;
+        }
+
+        addFavoritePins();
+    </script>
+</body>
+</html>
